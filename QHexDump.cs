@@ -38,9 +38,9 @@ public class QHexDump {
       public void ParseArgs( string [] args ) {
          for( int i = 0; i < args.Length; i++ ) {
             string arg = args[i];
-	    if( arg.Equals( "-h" ) || arg.Equals( "--help" ) || arg.Equals( "/?" ) ) {
-	       Help();
-	       Environment.Exit( 0 );
+            if( arg.Equals( "-h" ) || arg.Equals( "--help" ) || arg.Equals( "/?" ) ) {
+               Help();
+               Environment.Exit( 0 );
             } else if( arg.Equals( "-v" ) || arg.Equals( "--verbose" ) ) {
                verbose = true;
             } else if( arg.Equals( "-i" ) || arg.Equals( "--interactive" ) ) {
@@ -58,7 +58,7 @@ public class QHexDump {
                   Console.Error.WriteLine( "Illegal offset!" );
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
-              }
+               }
             } else if( arg.Equals( "-l" ) || arg.Equals( "--length" ) ) {
                i++;
                try {
@@ -99,8 +99,8 @@ public class QHexDump {
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
-	    } else if( i == args.Length - 1 ) {
-	       filename = arg;
+            } else if( i == args.Length - 1 ) {
+               filename = arg;
             } else {
                Console.Error.WriteLine( "Unknown argument \"{0}\"!", arg );
                Environment.Exit( 20 );
@@ -137,12 +137,12 @@ public class QHexDump {
             byte [] buffer = new byte[ options.length ];
             stream.Seek( options.offset, SeekOrigin.Begin );
             stream.Read( buffer, 0, options.length );
-	    stream.Close();
-	    int row = 0;
-	    int column = 0;
-	    int group = 0;
-	    int start = 0;
-	    if( options.guides ) {
+            stream.Close();
+            int row = 0;
+            int column = 0;
+            int group = 0;
+            int start = 0;
+            if( options.guides ) {
                Console.Write( "".PadRight( 4 ) );
                Console.Write( String.Empty.PadLeft( 8 + 1 ) );
                for( int i = 0; i < options.columns; i++ ) {
@@ -153,45 +153,45 @@ public class QHexDump {
                      group = 0;
                   }
                }
-	       Console.WriteLine();
-	       Console.WriteLine();
-	    }
-	    group = 0;
-	    for( int i = 0; i < options.length; i++ ) {
-	       if( options.guides ) {
-	          if( column == 0 ) {
-		     Console.Write( String.Format( "{0}", row + 1 ).PadLeft( 3 ).PadRight( 4 ) );
-		     Console.Write( String.Format( "{0:X} ", options.offset + i ).PadLeft( 8 + 1 ) );
+               Console.WriteLine();
+               Console.WriteLine();
+            }
+            group = 0;
+            for( int i = 0; i < options.length; i++ ) {
+               if( options.guides ) {
+                  if( column == 0 ) {
+                     Console.Write( String.Format( "{0}", row + 1 ).PadLeft( 3 ).PadRight( 4 ) );
+                     Console.Write( String.Format( "{0:X} ", options.offset + i ).PadLeft( 8 + 1 ) );
                   }
                }
-	       Console.Write( "{0:X2}", buffer[ i ] );
-	       column++;
-	       if( column >= options.columns ) {
-	          if( options.ascii ) {
-		     Console.Write( " | " );
-		     for( int j = start; j < i; j++ ) {
-		        char chr = (char) buffer[ j ];
-			if( !IsCharReadable( chr ) ) {
-			   chr = UNRECOGNIZED;
-                        }
-			Console.Write( chr );
-       	             }
-       	             start = i + 1;
-		  }
-		  Console.WriteLine();
-		  column = 0;
+               Console.Write( "{0:X2}", buffer[ i ] );
+               column++;
+               if( column >= options.columns ) {
+                  if( options.ascii ) {
+                  Console.Write( " | " );
+                  for( int j = start; j <= i; j++ ) {
+                     char chr = (char) buffer[ j ];
+                     if( !IsCharReadable( chr ) ) {
+                        chr = UNRECOGNIZED;
+                     }
+                     Console.Write( chr );
+                  }
+                  start = i + 1;
+               }
+               Console.WriteLine();
+               column = 0;
+               group = 0;
+               row++;
+               if( row >= options.rows ) {
+                  break;
+               }
+            } else {
+               group++;
+               if( group >= options.group ) {
+                  Console.Write( ' ' );
                   group = 0;
-		  row++;
-		  if( row >= options.rows ) {
-		     break;
-		  }
-               } else {
-	          group++;
-		  if( group >= options.group ) {
-		     Console.Write( ' ' );
-		     group = 0;
-                  }
                }
+            }
             }
          } catch( Exception e ) {
             Console.Error.WriteLine( e.Message );
