@@ -1,14 +1,18 @@
-// QHexDump v1.0 (c) 2022 Sensei (aka 'Q')
+// QHexDump v1.1 (c) 2022 Sensei (aka 'Q')
 // Dumps the specified file in hexadecimal and ASCII format. Supports interactive mode in the console.
 //
 // Usage:
-// QHexDump [-h|--help|/?] [-v|--verbose] [-i|--interactive] [-n|--no-guides] [-x|--hex-only] [-o|--offset] [-l|--length] [-c|--columns] [-r|--rows] [-g|--group] filename
+// QHexDump [-h|--help|/?] [-v|--verbose] [-i|--interactive] [-n|--no-guides] [-x|--hex-only] [-o|--offset] [-l|--length] [-c|--columns] [-r|--rows] [-g|--group] [-f|--find <ascii>] filename
 //
 // Compilation:
 // %SYSTEMROOT%\Microsoft.NET\Framework\v3.5\csc QHexDump.cs
+//
+// TODO: enter hex and ASCII to find in interactive mode
+//
 
 using System;
 using System.IO;
+using System.Text;
 
 public class QHexDump {
    public class Options {
@@ -22,8 +26,9 @@ public class QHexDump {
       public int columns;
       public int rows;
       public int group;
+      public string[] find;
       public Options() {
-         filename = null;
+         filename = "";
          verbose = false;
          interactive = false;
          guides = true;
@@ -33,6 +38,7 @@ public class QHexDump {
          columns = 32;
          rows = 32;
          group = 4;
+         find = new string[ 0 ];
       }
 
       public void ParseArgs( string [] args ) {
@@ -55,7 +61,6 @@ public class QHexDump {
                   offset = Int64.Parse( args[ i ] );
                   if( offset < 0 ) throw( new FormatException() );
                } catch( Exception e ) {
-                  Console.Error.WriteLine( "Illegal offset!" );
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
@@ -65,7 +70,6 @@ public class QHexDump {
                   length = Int32.Parse( args[ i ] );
                   if( length <= 0 ) throw( new FormatException() );
                } catch( Exception e ) {
-                  Console.Error.WriteLine( "Illegal length!" );
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
@@ -75,7 +79,6 @@ public class QHexDump {
                   columns = Int32.Parse( args[ i ] );
                   if( columns <= 0 ) throw( new FormatException() );
                } catch( Exception e ) {
-                  Console.Error.WriteLine( "Illegal columns!" );
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
@@ -85,7 +88,6 @@ public class QHexDump {
                   rows = Int32.Parse( args[ i ] );
                   if( rows <= 0 ) throw( new FormatException() );
                } catch( Exception e ) {
-                  Console.Error.WriteLine( "Illegal rows!" );
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
@@ -95,7 +97,14 @@ public class QHexDump {
                   group = Int32.Parse( args[ i ] );
                   if( group <= 0 ) throw( new FormatException() );
                } catch( Exception e ) {
-                  Console.Error.WriteLine( "Illegal group!" );
+                  Console.Error.WriteLine( e.Message );
+                  Environment.Exit( 20 );
+               }
+            } else if( arg.Equals( "-f" ) || arg.Equals( "--find" ) ) {
+               i++;
+               try {
+                  find = args[ i ].Split( ',' );
+               } catch( Exception e ) {
                   Console.Error.WriteLine( e.Message );
                   Environment.Exit( 20 );
                }
@@ -111,6 +120,11 @@ public class QHexDump {
          } else if( length > 0 ) {
             rows = ( length + columns - 1 ) / columns;
          }
+         if( find.Length >= HIGHLIGHTS.Length ) {
+            if( verbose ) {
+               Console.Error.WriteLine( "Too many strings to find.." );
+            }
+         }
       }
    }
 
@@ -121,6 +135,20 @@ public class QHexDump {
       if( READABLE.IndexOf( chr ) != -1 ) return( true );
       return( false );
    }
+
+   private static ConsoleColor [] HIGHLIGHTS = new ConsoleColor[] {
+      ConsoleColor.Black,
+      ConsoleColor.Red,
+      ConsoleColor.Yellow,
+      ConsoleColor.Green,
+      ConsoleColor.Cyan,
+      ConsoleColor.Blue,
+      ConsoleColor.DarkRed,
+      ConsoleColor.DarkYellow,
+      ConsoleColor.DarkGreen,
+      ConsoleColor.DarkCyan,
+      ConsoleColor.DarkBlue
+   };
 
    public static char UNRECOGNIZED = ' ';
 
@@ -133,11 +161,44 @@ public class QHexDump {
                Console.WriteLine( "Dumping the file \"{0}\" Length {1} (0x{2:X})", filename, length, length );
                Console.WriteLine();
             }
+
+            int border = 0;
+            if( options.find.Length > 0 ) {
+               for( int i = 0; i < options.find.Length; i++ ) {
+                  string find = options.find[ i ];
+                  border = Math.Max( border, find.Length );
+               }
+            }
+
+            int border_start = border;
+            int border_end = border;
+
+            if( options.offset < border_start ) {
+               border_start = (int) options.offset;
+            }
+
             FileStream stream = File.Open( filename, FileMode.Open, FileAccess.Read, FileShare.Read );
-            byte [] buffer = new byte[ options.length ];
-            stream.Seek( options.offset, SeekOrigin.Begin );
-            stream.Read( buffer, 0, options.length );
+            int buffer_length = border_start + options.length + border_end;
+            byte [] buffer = new byte[ buffer_length ];
+            stream.Seek( options.offset - border_start, SeekOrigin.Begin );
+            stream.Read( buffer, 0, buffer_length );
             stream.Close();
+
+            int [] highlights = new int[ buffer_length ];
+
+            StringBuilder builder = new StringBuilder( buffer_length * 2 );
+            for( int i = 0; i < buffer_length; i++ ) {
+               builder.Append( buffer[ i ].ToString( "X2" ) );
+            }
+            string hex_buffer = builder.ToString();
+
+            builder = new StringBuilder( buffer_length ); // .NET Framework v3.5 does not have Clear()..
+            for( int i = 0; i < buffer_length; i++ ) {
+               char chr = (char) buffer[ i ];
+               builder.Append( IsCharReadable( chr ) ? chr : UNRECOGNIZED );
+            }
+            string ascii_buffer = builder.ToString();
+
             int row = 0;
             int column = 0;
             int group = 0;
@@ -156,6 +217,36 @@ public class QHexDump {
                Console.WriteLine();
                Console.WriteLine();
             }
+            if( options.find.Length > 0 ) {
+               int color_index = 1;
+               foreach( string find in options.find ) {
+                  {
+                     int index = hex_buffer.IndexOf( find );
+                     while( index != -1 ) {
+                        int start_index = index / 2;
+                        int len = find.Length / 2;
+                        for( int i = 0; i < len ; i++ ) {
+                           highlights[ start_index + i ] = color_index;
+                        }
+                        index = hex_buffer.IndexOf( find, index + find.Length );
+                     }
+                  }
+                  {
+                     int index = ascii_buffer.IndexOf( find );
+                     while( index != -1 ) {
+                        int start_index = index;
+                        int len = find.Length;
+                        for( int i = 0; i < len ; i++ ) {
+                           highlights[ start_index + i ] = color_index;
+                        }
+                        index = ascii_buffer.IndexOf( find, index + find.Length );
+                     }
+                  }
+                  color_index++;
+               }
+            }
+            ConsoleColor old_background_color = Console.BackgroundColor;
+            ConsoleColor old_foreground_color = Console.ForegroundColor;
             group = 0;
             for( int i = 0; i < options.length; i++ ) {
                if( options.guides ) {
@@ -164,34 +255,48 @@ public class QHexDump {
                      Console.Write( String.Format( "{0:X} ", options.offset + i ).PadLeft( 8 + 1 ) );
                   }
                }
-               Console.Write( "{0:X2}", buffer[ i ] );
+               int highlight_color_index = highlights[ border_start + i ];
+               if( highlight_color_index != 0 ) { // It is slow, which is why it is set up only when it is needed..
+                  Console.BackgroundColor = HIGHLIGHTS[ Math.Min( highlight_color_index, HIGHLIGHTS.Length - 1 ) ];
+                  Console.ForegroundColor = ConsoleColor.Black;
+               }
+               Console.Write( hex_buffer.Substring( ( border_start + i ) * 2, 2 ) );
+               if( highlight_color_index != 0 ) { // It is slow, which is why it is set up only when it is needed..
+                  Console.BackgroundColor = old_background_color;
+                  Console.ForegroundColor = old_foreground_color;
+               }
                column++;
                if( column >= options.columns ) {
                   if( options.ascii ) {
-                  Console.Write( " | " );
-                  for( int j = start; j <= i; j++ ) {
-                     char chr = (char) buffer[ j ];
-                     if( !IsCharReadable( chr ) ) {
-                        chr = UNRECOGNIZED;
+                     Console.Write( " | " );
+                     for( int j = start; j <= i; j++ ) {
+                        highlight_color_index = highlights[ border_start + j ];
+                        if( highlight_color_index != 0 ) { // It is slow, which is why it is set up only when it is needed..
+                           Console.BackgroundColor = HIGHLIGHTS[ Math.Min( highlight_color_index, HIGHLIGHTS.Length - 1 ) ];
+                           Console.ForegroundColor = ConsoleColor.Black;
+                        }
+                        Console.Write( ascii_buffer[ border_start + j ] );
+                        if( highlight_color_index != 0 ) { // It is slow, which is why it is set up only when it is needed..
+                           Console.BackgroundColor = old_background_color;
+                           Console.ForegroundColor = old_foreground_color;
+                        }
                      }
-                     Console.Write( chr );
+                     start = i + 1;
                   }
-                  start = i + 1;
-               }
-               Console.WriteLine();
-               column = 0;
-               group = 0;
-               row++;
-               if( row >= options.rows ) {
-                  break;
-               }
-            } else {
-               group++;
-               if( group >= options.group ) {
-                  Console.Write( ' ' );
+                  Console.WriteLine();
+                  column = 0;
                   group = 0;
+                  row++;
+                  if( row >= options.rows ) {
+                     break;
+                  }
+               } else {
+                  group++;
+                  if( group >= options.group ) {
+                     Console.Write( ' ' );
+                     group = 0;
+                  }
                }
-            }
             }
          } catch( Exception e ) {
             Console.Error.WriteLine( e.Message );
@@ -201,7 +306,7 @@ public class QHexDump {
    }
 
    public static void HexDumpInteractive( string filename, Options options ) {
-      ConsoleKey key;
+      ConsoleKeyInfo input;
       do {
          Console.Clear();
 
@@ -223,32 +328,54 @@ public class QHexDump {
 
          HexDump( filename, options );
 
-         ConsoleKeyInfo input = Console.ReadKey( true );
-         key = input.Key;
-         if( key == ConsoleKey.UpArrow ) {
-            options.offset = Math.Max( 0, options.offset - options.columns );
-         } else if( key == ConsoleKey.DownArrow ) {
-            options.offset = Math.Max( 0, options.offset + options.columns );
-         } else if( key == ConsoleKey.LeftArrow ) {
-            options.group = Math.Max( 1, options.group - 1 );
-         } else if( key == ConsoleKey.RightArrow ) {
-            options.group = Math.Min( options.columns, options.group + 1 );
-         } else if( key == ConsoleKey.PageUp ) {
-            options.offset = Math.Max( 0, options.offset - options.length );
-         } else if( key == ConsoleKey.PageDown ) {
-            options.offset = Math.Max( 0, options.offset + options.length );
-         } else if( key == ConsoleKey.Home ) {
-            options.offset = 0;
-         } else if( key == ConsoleKey.End ) {
-            options.offset = Math.Max( 0, length - options.length );
-         } else if( key == ConsoleKey.G ) {
-            options.guides = !options.guides;
-         } else if( key == ConsoleKey.A ) {
-            options.ascii = !options.ascii;
-         } else if( key == ConsoleKey.V ) {
-            options.verbose = !options.verbose;
+         input = Console.ReadKey( true );
+         switch( input.Key ) {
+            case ConsoleKey.UpArrow: {
+               options.offset = Math.Max( 0, options.offset - options.columns );
+               break;
+            }
+            case ConsoleKey.DownArrow: {
+               options.offset = Math.Max( 0, options.offset + options.columns );
+               break;
+            }
+            case ConsoleKey.LeftArrow: {
+               options.group = Math.Max( 1, options.group - 1 );
+               break;
+            }
+            case ConsoleKey.RightArrow: {
+               options.group = Math.Min( options.columns, options.group + 1 );
+               break;
+            }
+            case ConsoleKey.PageUp: {
+               options.offset = Math.Max( 0, options.offset - options.length );
+               break;
+            }
+            case ConsoleKey.PageDown: {
+               options.offset = Math.Max( 0, options.offset + options.length );
+               break;
+            }
+            case ConsoleKey.Home: {
+               options.offset = 0;
+               break;
+            }
+            case ConsoleKey.End: {
+               options.offset = Math.Max( 0, length - options.length );
+               break;
+            }
+            case ConsoleKey.G: {
+               options.guides = !options.guides;
+               break;
+            }
+            case ConsoleKey.A: {
+               options.ascii = !options.ascii;
+               break;
+            }
+            case ConsoleKey.V: {
+               options.verbose = !options.verbose;
+               break;
+            }
          }
-      } while( key != ConsoleKey.Escape );
+      } while( input.Key != ConsoleKey.Escape );
    }
 
    public static void Help() {
@@ -256,11 +383,12 @@ public class QHexDump {
       Console.WriteLine( "Dumps the specified file in hexadecimal and ASCII format. Supports interactive mode in the console." );
       Console.WriteLine();
       Console.WriteLine( "Usage:" );
-      Console.WriteLine( "QHexDump [-h|--help|/?] [-v|--verbose] [-i|--interactive] [-o|--offset] [-l|--length] [-c|--columns] [-r|--rows] [-g|--group] filename" );
+      Console.WriteLine( "QHexDump [-h|--help|/?] [-v|--verbose] [-i|--interactive] [-n|--no-guides] [-x|--hex-only] [-o|--offset] [-l|--length] [-c|--columns] [-r|--rows] [-g|--group] [-f|--find <ascii>] filename" );
       Console.WriteLine();
       Console.WriteLine( "Examples:" );
       Console.WriteLine( "QHexDump data.exe" );
-      Console.WriteLine( "QHexDump --offset 10000 --length 10000 --columns 100 --group 16 data.exe" );
+      Console.WriteLine( "QHexDump --offset 10000 --length 10000 --columns 100 --group 20 data.exe" );
+      Console.WriteLine( "QHexDump -i -v -f find,me data.exe" );
    }
 
    public static void Main( string [] args ) {
